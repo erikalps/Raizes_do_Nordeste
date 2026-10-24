@@ -30,3 +30,22 @@ export class ValidationError extends AppError {
     super(422, "DADOS_INVALIDOS", "Um ou mais campos são inválidos.", details);
   }
 }
+//401: (sem token, token inválido ou código errado)
+export class UnauthorizedError extends AppError {
+  constructor(message: string, code = "NAO_AUTENTICADO") {
+    super(401, code, message);
+  }
+}
+//perfil não autorizado a fazer determinada ação 
+export class ForbiddenError extends AppError {
+  constructor(message: string) {
+    super(403, "SEM_PERMISSAO", message);
+  }
+}
+
+//excesso de tentativas 
+export class AcessoBloqueadoError extends AppError {
+  constructor(message: string) {
+    super(429, "ACESSO_BLOQUEADO", message);
+  }
+}
