@@ -2,9 +2,10 @@ import { Router } from "express";
 import { healthRoutes } from "./health.routes.js";
 import { authRoutes } from "./auth.routes.js";
 import { unidadesRoutes } from "./unidades.routes.js";
-
+import { pedidosRoutes } from "./pedidos.routes.js";
 export const routes = Router();
 
 routes.use("/health", healthRoutes);
 routes.use("/auth", authRoutes);
 routes.use("/unidades", unidadesRoutes);
+routes.use("/pedidos", pedidosRoutes);
