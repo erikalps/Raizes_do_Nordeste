@@ -1,7 +1,7 @@
 import { prisma } from "../../infrastructure/database/prisma.js";
 import type { Prisma } from "../../generated/prisma/client.js";
 import type { FuncionarioAutenticado } from "../../infrastructure/auth/jwt.js";
-import { podeMudarStatus } from "./transicoesStatus.js";
+import { podeMudarStatus } from "../../domain/pedido/transicoesStatus.js";
 import type { StatusPedido } from "../../generated/prisma/client.js";
 import { ConflictError, ForbiddenError, NotFoundError } from "../../domain/errors/AppError.js";
 

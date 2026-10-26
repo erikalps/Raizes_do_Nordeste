@@ -54,3 +54,8 @@ export function prazoDoPagamento(canal: CanalPedido, agora: Date): Date {
     return new Date(agora.getTime() + PRAZO_PAGAMENTO_MINUTOS[canal] * 60 * 1000);
 }
 
+const PAPEIS_DO_BALCAO = ["ATENDENTE", "GERENTE"];
+
+export function podeAtenderNoBalcao(papel: string): boolean {
+    return PAPEIS_DO_BALCAO.includes(papel);
+}

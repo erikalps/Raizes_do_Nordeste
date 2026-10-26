@@ -2,6 +2,8 @@ import type { RequestHandler } from "express";
 import { z } from "zod";
 import { validar } from "../validation/validar.js";
 import { criarPedido } from "../../application/pedido/criarPedido.js";
+import { cancelarPedido } from "../../application/pedido/cancelarPedido.js";
+
 
 const itemSchema = z.object({
   produtoId: z.uuid({ error: "Deve ser um identificador válido." }),
@@ -34,4 +36,14 @@ export const criar: RequestHandler = async (req, res) => {
   const dados = validar(criarPedidoSchema, req.body);
   const pedido = await criarPedido(dados, req.funcionario);
   res.status(201).json(pedido);
+};
+
+const pedidoParamsSchema = z.object({
+  id: z.uuid({ error: "Deve ser um identificador válido." }),
+});
+
+export const cancelar: RequestHandler = async (req, res) => {
+  const { id } = validar(pedidoParamsSchema, req.params);
+  const resultado = await cancelarPedido(id, req.funcionario);
+  res.status(200).json(resultado);
 };

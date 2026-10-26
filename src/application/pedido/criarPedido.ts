@@ -4,25 +4,12 @@ import { hashCpf } from "../../infrastructure/crypto/dadosPessoais.js";
 import type { FuncionarioAutenticado } from "../../infrastructure/auth/jwt.js";
 import { vendaSazonalLiberada } from "../../domain/cardapio/disponibilidade.js";
 import type { IngredienteDaReceita } from "../../domain/cardapio/disponibilidade.js";
-import {
-    calcularPontos,
-    dentroDoHorario,
-    exigeHorarioDeFuncionamento,
-    formaPagamentoPermitida,
-    prazoDoPagamento,
-    somarIngredientes,
-} from "../../domain/pedido/regrasPedido.js";
-import type { CanalPedido, FormaPagamento, ItemSolicitado } from "../../domain/pedido/regrasPedido.js";
-import {
-    ConflictError,
-    ForbiddenError,
-    NotFoundError,
-    UnauthorizedError,
-    ValidationError,
-} from "../../domain/errors/AppError.js";
+import {calcularPontos,dentroDoHorario,exigeHorarioDeFuncionamento,formaPagamentoPermitida,prazoDoPagamento,somarIngredientes,} from "../../domain/pedido/regrasPedido.js";
+import { podeAtenderNoBalcao, type CanalPedido, type FormaPagamento, type ItemSolicitado } from "../../domain/pedido/regrasPedido.js";
+import {ConflictError,ForbiddenError,NotFoundError,UnauthorizedError,ValidationError,} from "../../domain/errors/AppError.js";
 
 const FUSO_HORARIO = "America/Sao_Paulo";
-const PAPEIS_DO_BALCAO = ["ATENDENTE", "GERENTE"];
+
 
 export type DadosPedido = {
     unidadeId: string;
@@ -63,7 +50,7 @@ export async function criarPedido(dados: DadosPedido, funcionario?: FuncionarioA
         if (!funcionario) {
             throw new UnauthorizedError("Pedido no balcão exige o login do atendente ou do gerente.");
         }
-        if (!PAPEIS_DO_BALCAO.includes(funcionario.papel)) {
+        if (!podeAtenderNoBalcao(funcionario.papel)) {
             throw new ForbiddenError("Só atendentes e gerentes podem registrar pedidos no balcão.");
         }
         if (funcionario.unidadeId !== dados.unidadeId) {
