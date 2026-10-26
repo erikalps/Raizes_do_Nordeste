@@ -4,10 +4,12 @@ import { authRoutes } from "./auth.routes.js";
 import { unidadesRoutes } from "./unidades.routes.js";
 import { pedidosRoutes } from "./pedidos.routes.js";
 import { pagamentosRoutes } from "./pagamentos.routes.js";
+import { cozinhaRoutes } from "./cozinha.routes.js";
 export const routes = Router();
 
 routes.use("/health", healthRoutes);
 routes.use("/auth", authRoutes);
 routes.use("/unidades", unidadesRoutes);
 routes.use("/pedidos", pedidosRoutes);
-routes.use("/pagamento", pagamentosRoutes)
+routes.use("/pagamentos", pagamentosRoutes);
+routes.use("/cozinha", cozinhaRoutes);
