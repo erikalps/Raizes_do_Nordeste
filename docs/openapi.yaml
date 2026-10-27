@@ -1,0 +1,754 @@
+openapi: 3.0.3
+info:
+  title: API Raízes do Nordeste
+  version: 1.0.0
+  description: API de pedidos multicanal com estoque por unidade e pagamento simulado.
+servers:
+  - url: http://localhost:3000
+    description: Execução local
+
+tags:
+  - name: Sistema
+    description: Saúde da API
+  - name: Autenticação
+    description: Login de funcionários com código de 4 dígitos e token JWT
+  - name: Unidades
+    description: Unidades ativas, funcionários e cardápio
+  - name: Pedidos
+    description: Criação, consulta e cancelamento de pedidos (app, totem e balcão)
+  - name: Cozinha e balcão
+    description: Fila da cozinha e mudanças de status do pedido
+  - name: Pagamento
+    description: Resultado do serviço de pagamento simulado
+
+paths:
+  /health:
+    get:
+      tags: [Sistema]
+      summary: Verifica se a API está no ar
+      responses:
+        "200":
+          description: API no ar
+          content:
+            application/json:
+              example:
+                status: ok
+
+  /auth/login:
+    post:
+      tags: [Autenticação]
+      summary: Login de funcionário
+      description: >
+        O funcionário escolhe o próprio nome na lista da unidade e informa o código de 4 dígitos.
+        Depois de 5 códigos errados seguidos, o acesso fica bloqueado por 15 minutos (RNF-11).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [funcionarioId, codigo]
+              properties:
+                funcionarioId: { type: string, format: uuid }
+                codigo: { type: string, pattern: '^\d{4}$' }
+            example:
+              funcionarioId: 20000000-0000-4000-8000-000000000002
+              codigo: "1111"
+      responses:
+        "200":
+          description: Login realizado
+          content:
+            application/json:
+              example:
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                tokenType: Bearer
+                expiresIn: 28800
+                funcionario:
+                  id: 20000000-0000-4000-8000-000000000002
+                  papel: GERENTE
+                  unidadeId: 10000000-0000-4000-8000-000000000001
+                  nome: Ana Gerente
+        "401":
+          description: Funcionário ou código inválido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Erro" }
+              example:
+                error: CREDENCIAIS_INVALIDAS
+                message: Funcionário ou código inválido.
+                details: []
+                timestamp: "2026-10-26T15:00:00.000Z"
+                path: /auth/login
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+        "429":
+          description: Acesso bloqueado por excesso de tentativas
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Erro" }
+              example:
+                error: ACESSO_BLOQUEADO
+                message: Acesso bloqueado por excesso de tentativas. Tente novamente mais tarde.
+                details: []
+                timestamp: "2026-10-26T15:00:00.000Z"
+                path: /auth/login
+
+  /auth/me:
+    get:
+      tags: [Autenticação]
+      summary: Funcionário logado
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Dados do token
+          content:
+            application/json:
+              example:
+                id: 20000000-0000-4000-8000-000000000002
+                papel: GERENTE
+                unidadeId: 10000000-0000-4000-8000-000000000001
+        "401": { $ref: "#/components/responses/NaoAutenticado" }
+
+  /unidades:
+    get:
+      tags: [Unidades]
+      summary: Lista as unidades ativas
+      description: Primeira etapa do cliente. Unidades desativadas pela matriz não aparecem.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de unidades
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 10000000-0000-4000-8000-000000000001
+                    cidade: Recife
+                    bairro: Boa Viagem
+                    horarioAbertura: "08:00"
+                    horarioFechamento: "23:00"
+                page: 1
+                limit: 10
+                total: 1
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /unidades/{id}/funcionarios:
+    parameters:
+      - $ref: "#/components/parameters/UnidadeId"
+    get:
+      tags: [Unidades]
+      summary: Lista os funcionários da unidade para a tela de login
+      description: Devolve só o id e o nome dos funcionários ativos.
+      responses:
+        "200":
+          description: Funcionários ativos
+          content:
+            application/json:
+              example:
+                - id: 20000000-0000-4000-8000-000000000002
+                  nome: Ana Gerente
+                - id: 20000000-0000-4000-8000-000000000003
+                  nome: Bruno Atendente
+        "404": { $ref: "#/components/responses/NaoEncontrado" }
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /unidades/{id}/produtos:
+    parameters:
+      - $ref: "#/components/parameters/UnidadeId"
+    get:
+      tags: [Unidades]
+      summary: Cardápio da unidade
+      description: >
+        Produtos oferecidos pela unidade, com o preço da unidade (ou o preço base) e a disponibilidade
+        calculada pela receita e pelo estoque. Sazonais fora da janela aparecem indisponíveis.
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página do cardápio
+          content:
+            application/json:
+              example:
+                data:
+                  - id: 40000000-0000-4000-8000-000000000004
+                    nome: Cuscuz com ovo
+                    preco: "13.00"
+                    disponivel: false
+                  - id: 40000000-0000-4000-8000-000000000003
+                    nome: Cuscuz com queijo coalho
+                    preco: "12.00"
+                    disponivel: true
+                page: 1
+                limit: 10
+                total: 4
+        "404": { $ref: "#/components/responses/NaoEncontrado" }
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /pedidos:
+    get:
+      tags: [Pedidos]
+      summary: Lista os pedidos com filtros
+      description: >
+        Gerente e atendente veem só os pedidos da própria unidade. Administrador e consultor da matriz
+        veem todas as unidades e podem filtrar por uma. Mais novos primeiro.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+        - name: canalPedido
+          in: query
+          required: false
+          schema: { type: string, enum: [APP, TOTEM, BALCAO] }
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [AGUARDANDO_PAGAMENTO, PAGO, EM_PREPARO, PRONTO, RETIRADO, CANCELADO, NAO_RETIRADO]
+        - name: unidadeId
+          in: query
+          required: false
+          description: Só para a matriz; para funcionários de loja, só a própria unidade
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Página de pedidos
+          content:
+            application/json:
+              example:
+                data:
+                  - pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                    unidadeId: 10000000-0000-4000-8000-000000000001
+                    canalPedido: TOTEM
+                    status: PAGO
+                    numeroRetirada: E3F563
+                    total: "28.00"
+                    criadoEm: "2026-10-26T17:22:30.000Z"
+                page: 1
+                limit: 10
+                total: 1
+        "401": { $ref: "#/components/responses/NaoAutenticado" }
+        "403": { $ref: "#/components/responses/SemPermissao" }
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+    post:
+      tags: [Pedidos]
+      summary: Cria um pedido
+      description: >
+        App e totem não exigem login. Balcão exige o token de atendente ou gerente da unidade.
+        Numa única transação: reserva os ingredientes, cria o pedido aguardando pagamento, abre a
+        tentativa de pagamento (10 min no app, 5 min no totem e no balcão) e, com CPF de cliente
+        cadastrado, gera pontos pendentes. O total é calculado pelo servidor.
+      security: [{}, { bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [unidadeId, canalPedido, formaPagamento, itens]
+              properties:
+                unidadeId: { type: string, format: uuid }
+                canalPedido: { type: string, enum: [APP, TOTEM, BALCAO] }
+                formaPagamento:
+                  type: string
+                  enum: [CARTAO, PIX, DINHEIRO]
+                  description: DINHEIRO só no balcão
+                cpf:
+                  type: string
+                  description: Opcional; só gera pontos se for de cliente cadastrado
+                itens:
+                  type: array
+                  minItems: 1
+                  maxItems: 20
+                  items:
+                    type: object
+                    required: [produtoId, quantidade]
+                    properties:
+                      produtoId: { type: string, format: uuid }
+                      quantidade: { type: integer, minimum: 1, maximum: 50 }
+            examples:
+              totem:
+                summary: Totem com CPF
+                value:
+                  unidadeId: 10000000-0000-4000-8000-000000000001
+                  canalPedido: TOTEM
+                  formaPagamento: PIX
+                  cpf: "52998224725"
+                  itens:
+                    - produtoId: 40000000-0000-4000-8000-000000000002
+                      quantidade: 2
+              balcao:
+                summary: Balcão em dinheiro (exige token)
+                value:
+                  unidadeId: 10000000-0000-4000-8000-000000000001
+                  canalPedido: BALCAO
+                  formaPagamento: DINHEIRO
+                  itens:
+                    - produtoId: 40000000-0000-4000-8000-000000000003
+                      quantidade: 1
+      responses:
+        "201":
+          description: Pedido criado, aguardando pagamento
+          content:
+            application/json:
+              example:
+                pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                status: AGUARDANDO_PAGAMENTO
+                canalPedido: TOTEM
+                total: "28.00"
+                itens:
+                  - produtoId: 40000000-0000-4000-8000-000000000002
+                    nome: Tapioca de queijo coalho
+                    quantidade: 2
+                    precoUnitario: "14.00"
+                pagamento:
+                  identificadorTentativa: 1bf45e46-e7fc-4071-a09a-cec288610b58
+                  forma: PIX
+                  status: PENDENTE
+                  expiraEm: "2026-10-26T17:27:30.000Z"
+        "401":
+          description: Pedido no balcão sem token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Erro" }
+              example:
+                error: NAO_AUTENTICADO
+                message: Pedido no balcão exige o login do atendente ou do gerente.
+                details: []
+                timestamp: "2026-10-26T15:00:00.000Z"
+                path: /pedidos
+        "403": { $ref: "#/components/responses/SemPermissao" }
+        "404":
+          description: Unidade inexistente ou produto fora do cardápio da unidade
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Erro" }
+              example:
+                error: NAO_ENCONTRADO
+                message: Um ou mais produtos não estão no cardápio desta unidade.
+                details: []
+                timestamp: "2026-10-26T15:00:00.000Z"
+                path: /pedidos
+        "409":
+          description: Regra de negócio impediu o pedido
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Erro" }
+              examples:
+                estoque:
+                  summary: Estoque insuficiente
+                  value:
+                    error: ESTOQUE_INSUFICIENTE
+                    message: Não há quantidade suficiente para um ou mais itens.
+                    details: []
+                    timestamp: "2026-10-26T15:00:00.000Z"
+                    path: /pedidos
+                fechada:
+                  summary: Unidade fora do horário (app e totem)
+                  value:
+                    error: UNIDADE_FECHADA
+                    message: A unidade está fora do horário de funcionamento.
+                    details: []
+                    timestamp: "2026-10-26T15:00:00.000Z"
+                    path: /pedidos
+                sazonal:
+                  summary: Produto sazonal fora do período
+                  value:
+                    error: PRODUTO_INDISPONIVEL
+                    message: Pamonha está fora do período de venda.
+                    details: []
+                    timestamp: "2026-10-26T15:00:00.000Z"
+                    path: /pedidos
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /pedidos/{id}:
+    parameters:
+      - $ref: "#/components/parameters/PedidoId"
+    get:
+      tags: [Pedidos]
+      summary: Detalhe do pedido (acompanhamento)
+      description: >
+        Sem token, o cliente acompanha o próprio pedido pelo id. Com token, o funcionário só consulta
+        pedidos da própria unidade (a matriz consulta qualquer um). A resposta não traz dados pessoais.
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: Pedido encontrado
+          content:
+            application/json:
+              example:
+                pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                unidadeId: 10000000-0000-4000-8000-000000000001
+                canalPedido: TOTEM
+                status: PAGO
+                motivoCancelamento: null
+                numeroRetirada: E3F563
+                total: "28.00"
+                itens:
+                  - nome: Tapioca de queijo coalho
+                    quantidade: 2
+                    precoUnitario: "14.00"
+                pagamento:
+                  forma: PIX
+                  status: APROVADO
+                datas:
+                  criadoEm: "2026-10-26T17:22:30.000Z"
+                  pagoEm: "2026-10-26T17:22:44.000Z"
+                  preparoIniciadoEm: null
+                  prontoEm: null
+                  finalizadoEm: null
+        "403": { $ref: "#/components/responses/SemPermissao" }
+        "404": { $ref: "#/components/responses/NaoEncontrado" }
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /pedidos/{id}/cancelamento:
+    parameters:
+      - $ref: "#/components/parameters/PedidoId"
+    post:
+      tags: [Pedidos]
+      summary: Cancela o pedido a pedido do cliente
+      description: >
+        Só antes do início do preparo. Sem token, o próprio cliente (app). Com token, atendente ou
+        gerente da unidade cancela pelo cliente (balcão e totem). A tentativa pendente é cancelada ou
+        o pagamento aprovado é estornado (simulado); os ingredientes voltam ao estoque e os pontos
+        pendentes são descartados.
+      security: [{}, { bearerAuth: [] }]
+      responses:
+        "200":
+          description: Pedido cancelado
+          content:
+            application/json:
+              examples:
+                semEstorno:
+                  summary: Pedido ainda aguardando pagamento
+                  value:
+                    pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                    status: CANCELADO
+                    estorno: false
+                    mensagem: Pedido cancelado.
+                comEstorno:
+                  summary: Pedido já pago
+                  value:
+                    pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                    status: CANCELADO
+                    estorno: true
+                    mensagem: Pedido cancelado. O valor pago será estornado.
+        "403": { $ref: "#/components/responses/SemPermissao" }
+        "404": { $ref: "#/components/responses/NaoEncontrado" }
+        "409":
+          description: O pedido não pode mais ser cancelado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Erro" }
+              example:
+                error: CANCELAMENTO_NAO_PERMITIDO
+                message: O pedido já entrou em preparo e não pode mais ser cancelado.
+                details: []
+                timestamp: "2026-10-26T15:00:00.000Z"
+                path: /pedidos/e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369/cancelamento
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /pedidos/{id}/preparo:
+    parameters:
+      - $ref: "#/components/parameters/PedidoId"
+    post:
+      tags: [Cozinha e balcão]
+      summary: Inicia o preparo (cozinheiro)
+      description: >
+        Pedido pago passa para em preparo. Libera os itens para a cozinha, confirma os pontos
+        pendentes no saldo do cliente e registra quem iniciou.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Preparo iniciado
+          content:
+            application/json:
+              example:
+                pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                status: EM_PREPARO
+                numeroRetirada: E3F563
+                itens:
+                  - nome: Tapioca de queijo coalho
+                    quantidade: 2
+        "401": { $ref: "#/components/responses/NaoAutenticado" }
+        "403": { $ref: "#/components/responses/SemPermissao" }
+        "404": { $ref: "#/components/responses/NaoEncontrado" }
+        "409": { $ref: "#/components/responses/TransicaoInvalida" }
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /pedidos/{id}/pronto:
+    parameters:
+      - $ref: "#/components/parameters/PedidoId"
+    post:
+      tags: [Cozinha e balcão]
+      summary: Marca o pedido como pronto (cozinheiro)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Pedido pronto para retirada
+          content:
+            application/json:
+              example:
+                pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                status: PRONTO
+                numeroRetirada: E3F563
+        "401": { $ref: "#/components/responses/NaoAutenticado" }
+        "403": { $ref: "#/components/responses/SemPermissao" }
+        "404": { $ref: "#/components/responses/NaoEncontrado" }
+        "409": { $ref: "#/components/responses/TransicaoInvalida" }
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /pedidos/{id}/retirada:
+    parameters:
+      - $ref: "#/components/parameters/PedidoId"
+    post:
+      tags: [Cozinha e balcão]
+      summary: Registra a retirada (atendente ou gerente)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Pedido entregue ao cliente
+          content:
+            application/json:
+              example:
+                pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                status: RETIRADO
+                numeroRetirada: E3F563
+        "401": { $ref: "#/components/responses/NaoAutenticado" }
+        "403": { $ref: "#/components/responses/SemPermissao" }
+        "404": { $ref: "#/components/responses/NaoEncontrado" }
+        "409": { $ref: "#/components/responses/TransicaoInvalida" }
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /cozinha/fila:
+    get:
+      tags: [Cozinha e balcão]
+      summary: Fila da cozinha (cozinheiro e gerente)
+      description: >
+        Pedidos pagos e em preparo da unidade do token, do pagamento mais antigo para o mais novo.
+        Os itens de um pedido pago ficam ocultos (null) até o início do preparo.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página da fila
+          content:
+            application/json:
+              example:
+                data:
+                  - pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                    numeroRetirada: E3F563
+                    canalPedido: TOTEM
+                    status: PAGO
+                    pagoEm: "2026-10-26T17:22:44.000Z"
+                    preparoIniciadoEm: null
+                    itens: null
+                page: 1
+                limit: 10
+                total: 1
+        "401": { $ref: "#/components/responses/NaoAutenticado" }
+        "403": { $ref: "#/components/responses/SemPermissao" }
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+  /pagamentos/{id}/resultado:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: Identificador da tentativa de pagamento, devolvido na criação do pedido
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Pagamento]
+      summary: Resultado do pagamento (serviço simulado)
+      description: >
+        Chamado pelo serviço de pagamento simulado. Aprovado deixa o pedido pago com número de
+        retirada. Recusado cancela o pedido e desfaz a reserva; o motivo detalhado fica só no registro
+        interno e o cliente recebe uma mensagem genérica. Resposta depois do prazo é tratada como sem
+        resposta. A mesma resposta repetida devolve o estado atual (idempotência). Limitação do mock:
+        a rota é pública; no sistema real, o serviço de pagamento assinaria a chamada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [resultado]
+              properties:
+                resultado: { type: string, enum: [APROVADO, RECUSADO] }
+                motivo:
+                  type: string
+                  description: Obrigatório quando o resultado é RECUSADO
+                  enum: [SALDO_INSUFICIENTE, SUSPEITA_FRAUDE, CARTAO_EXPIRADO, DADOS_INVALIDOS, ERRO_PROCESSAMENTO]
+            examples:
+              aprovado:
+                summary: Pagamento aprovado
+                value:
+                  resultado: APROVADO
+              recusado:
+                summary: Pagamento recusado
+                value:
+                  resultado: RECUSADO
+                  motivo: SALDO_INSUFICIENTE
+      responses:
+        "200":
+          description: Resultado processado
+          content:
+            application/json:
+              examples:
+                aprovado:
+                  summary: Pedido pago
+                  value:
+                    pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                    status: PAGO
+                    numeroRetirada: E3F563
+                    pagamento:
+                      identificadorTentativa: 1bf45e46-e7fc-4071-a09a-cec288610b58
+                      status: APROVADO
+                    mensagem: Pagamento aprovado.
+                recusado:
+                  summary: Pedido cancelado por recusa
+                  value:
+                    pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                    status: CANCELADO
+                    numeroRetirada: null
+                    pagamento:
+                      identificadorTentativa: 1bf45e46-e7fc-4071-a09a-cec288610b58
+                      status: RECUSADO
+                    mensagem: Pagamento não autorizado. Faça um novo pedido usando outro método de pagamento.
+                semResposta:
+                  summary: Resposta depois do prazo
+                  value:
+                    pedidoId: e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369
+                    status: CANCELADO
+                    numeroRetirada: null
+                    pagamento:
+                      identificadorTentativa: 1bf45e46-e7fc-4071-a09a-cec288610b58
+                      status: SEM_RESPOSTA
+                    mensagem: Não foi possível confirmar o pagamento. Se houver alguma cobrança, ela será estornada.
+        "404": { $ref: "#/components/responses/NaoEncontrado" }
+        "409":
+          description: Tentativa já respondida com outro resultado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Erro" }
+              example:
+                error: PAGAMENTO_JA_PROCESSADO
+                message: Esta tentativa de pagamento já foi respondida com outro resultado.
+                details: []
+                timestamp: "2026-10-26T15:00:00.000Z"
+                path: /pagamentos/1bf45e46-e7fc-4071-a09a-cec288610b58/resultado
+        "422": { $ref: "#/components/responses/DadosInvalidos" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token obtido em POST /auth/login
+
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, default: 1 }
+      description: Número da página
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      description: Itens por página
+    UnidadeId:
+      name: id
+      in: path
+      required: true
+      description: Id da unidade
+      schema: { type: string, format: uuid, example: 10000000-0000-4000-8000-000000000001 }
+    PedidoId:
+      name: id
+      in: path
+      required: true
+      description: Id do pedido, devolvido na criação
+      schema: { type: string, format: uuid }
+
+  schemas:
+    Erro:
+      type: object
+      properties:
+        error: { type: string, example: DADOS_INVALIDOS }
+        message: { type: string, example: Um ou mais campos são inválidos. }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string, example: canalPedido }
+              issue: { type: string, example: "Campo obrigatório: APP, TOTEM ou BALCAO." }
+        timestamp: { type: string, format: date-time }
+        path: { type: string, example: /pedidos }
+
+  responses:
+    NaoAutenticado:
+      description: Token ausente, inválido ou expirado
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Erro" }
+          example:
+            error: NAO_AUTENTICADO
+            message: Token não informado.
+            details: []
+            timestamp: "2026-10-26T15:00:00.000Z"
+            path: /cozinha/fila
+    SemPermissao:
+      description: Perfil sem permissão ou recurso de outra unidade
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Erro" }
+          example:
+            error: SEM_PERMISSAO
+            message: Seu perfil não tem permissão para esta ação.
+            details: []
+            timestamp: "2026-10-26T15:00:00.000Z"
+            path: /pedidos/{id}/preparo
+    NaoEncontrado:
+      description: Recurso inexistente
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Erro" }
+          example:
+            error: NAO_ENCONTRADO
+            message: Pedido não encontrado.
+            details: []
+            timestamp: "2026-10-26T15:00:00.000Z"
+            path: /pedidos/00000000-0000-4000-8000-000000000000
+    TransicaoInvalida:
+      description: Mudança de status fora da ordem, ou status alterado por outra ação ao mesmo tempo
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Erro" }
+          example:
+            error: TRANSICAO_INVALIDA
+            message: Não é possível mudar o pedido de PAGO para PRONTO.
+            details: []
+            timestamp: "2026-10-26T15:00:00.000Z"
+            path: /pedidos/e3f563e3-d8a4-4dd4-b32e-60ba8a8b9369/pronto
+    DadosInvalidos:
+      description: Dados da requisição em formato inválido
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Erro" }
+          example:
+            error: DADOS_INVALIDOS
+            message: Um ou mais campos são inválidos.
+            details:
+              - field: canalPedido
+                issue: "Campo obrigatório: APP, TOTEM ou BALCAO."
+            timestamp: "2026-10-26T15:00:00.000Z"
+            path: /pedidos

@@ -5,6 +5,8 @@ import { unidadesRoutes } from "./unidades.routes.js";
 import { pedidosRoutes } from "./pedidos.routes.js";
 import { pagamentosRoutes } from "./pagamentos.routes.js";
 import { cozinhaRoutes } from "./cozinha.routes.js";
+import { docsRoutes } from "./docs.routes.js";
+
 export const routes = Router();
 
 routes.use("/health", healthRoutes);
@@ -13,3 +15,4 @@ routes.use("/unidades", unidadesRoutes);
 routes.use("/pedidos", pedidosRoutes);
 routes.use("/pagamentos", pagamentosRoutes);
 routes.use("/cozinha", cozinhaRoutes);
+routes.use("/docs", docsRoutes);
