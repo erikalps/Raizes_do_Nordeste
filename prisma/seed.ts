@@ -60,7 +60,7 @@ async function main() {
       bairro: "Boa Viagem",
       regiao: "Nordeste",
       horario_abertura: hora("08:00"),
-      horario_fechamento: hora("23:00"),
+      horario_fechamento: hora("23:59"),
       ativa: true,
       responsavel_metas: "GERENTE",
     },
