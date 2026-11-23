@@ -19,7 +19,7 @@ O fluxo implementado é o de pedido (Fluxo A do roteiro): o cliente escolhe a un
 
 ## Requisitos
 
-- **Node.js** 22 ou superior (desenvolvido com a versão VERSAO_NODE)
+- **Node.js** 22 ou superior
 - **npm** (vem com o Node.js)
 - **MySQL** 8.0.16 ou superior. Versões anteriores ignoram as restrições `CHECK` usadas no banco.
 - **Postman** (opcional, para rodar os testes pela interface)
@@ -29,7 +29,7 @@ O fluxo implementado é o de pedido (Fluxo A do roteiro): o cliente escolhe a un
 ### 1. Clonar e instalar as dependências
 
 ```bash
-git clone https://github.com/SEU_USUARIO/Raizes_do_Nordeste.git
+git clone https://github.com/erikalps/Raizes_do_Nordeste.git
 cd Raizes_do_Nordeste
 npm install
 ```
@@ -110,7 +110,7 @@ O arquivo [`docs/openapi.yaml`](docs/openapi.yaml) também pode ser aberto sem r
 
 ## Dados de exemplo (seed)
 
-**Unidade:** Boa Viagem, Recife (`10000000-0000-4000-8000-000000000001`), aberta das 00:00 às 23:59.
+**Unidade:** Boa Viagem, Recife (`10000000-0000-4000-8000-000000000001`), aberta das 08:00 às 23:59.
 
 **Funcionários** (login com o id e o código de 4 dígitos):
 
@@ -134,6 +134,8 @@ Os testes estão na coleção do Postman: 29 cenários (17 positivos e 12 negati
 ```bash
 npx prisma db seed
 ```
+
+**Horário:** rode a coleção entre 08:00 e 23:59 (horário de Brasília). Fora desse horário, a unidade do seed está fechada, e os pedidos do app e do totem são recusados com `UNIDADE_FECHADA`.
 
 **Pelo terminal** (com o Newman):
 
@@ -174,7 +176,7 @@ O plano de testes completo, com pré-condição, entrada e saída esperada de ca
 | POST | `/pedidos/{id}/pronto` | Cozinheiro | Marca como pronto |
 | POST | `/pedidos/{id}/retirada` | Atendente, gerente | Registra a entrega |
 
-Toda listagem é paginada com `page` e `limit` (máximo 50). Todo erro segue o mesmo formato:
+As listagens de unidades, cardápio, pedidos e fila da cozinha são paginadas com `page` e `limit` (máximo 50). Todo erro segue o mesmo formato:
 
 ```json
 {
@@ -210,4 +212,4 @@ src/
 - **Pagamento simulado:** a rota `POST /pagamentos/{id}/resultado` é pública para permitir os testes. Em um sistema real, o serviço de pagamento assinaria a chamada.
 - **Cliente sem login:** o cancelamento e o acompanhamento sem token dependem do id do pedido, um UUID aleatório entregue só a quem criou o pedido. Um sistema real exigiria uma prova de que o pedido é daquele aparelho.
 - **Dados pessoais:** CPF, e-mail, celular e data de nascimento são criptografados; o CPF também é guardado como hash HMAC, usado na busca. Nenhuma resposta da API devolve dados pessoais.
-- **Fora da implementação** (só documentados): cadastro de cliente, resgate de pontos, campanhas e gestão de cardápio e estoque pelo gerente.
+- **Fora da implementação** (só documentados): cadastro de cliente, resgate de pontos, campanhas, gestão de cardápio e estoque pelo gerente, registro do pagamento em dinheiro pelo atendente e encerramento automático do pedido quando o pagamento não recebe resposta no prazo.
