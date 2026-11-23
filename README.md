@@ -4,7 +4,6 @@ API de pedidos multicanal com estoque por unidade e pagamento simulado. Estudo d
 
 O fluxo implementado é o de pedido (Fluxo A do roteiro): o cliente escolhe a unidade, consulta o cardápio e faz o pedido pelo app, pelo totem ou no balcão; o pagamento simulado aprova ou recusa; a cozinha prepara e o balcão entrega. Todos os canais usam a mesma API e as mesmas regras.
 
-- **Repositório:** https://github.com/SEU_USUARIO/Raizes_do_Nordeste
 - **Swagger (com a API rodando):** http://localhost:3000/docs
 - **Coleção do Postman:** [`postman/raizes-do-nordeste.postman_collection.json`](postman/raizes-do-nordeste.postman_collection.json)
 - **Especificação OpenAPI:** [`docs/openapi.yaml`](docs/openapi.yaml)
